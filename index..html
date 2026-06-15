@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>เว็บคีย์หวย รับแทง</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#fff4f7;margin:0;padding:16px;color:#333}
+.box{max-width:620px;margin:auto;background:#fff;padding:18px;border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.12)}
+h1{text-align:center;color:#e75480;margin:4px 0 14px}
+h3{margin-bottom:8px}
+label{font-size:14px;font-weight:700;margin-top:10px;display:block}
+input,select,button{width:100%;padding:12px;margin-top:7px;border:1px solid #ddd;border-radius:12px;font-size:16px}
+button{background:#e75480;color:#fff;border:none;font-weight:800}
+button.gray{background:#666}
+button.red{background:#d9534f}
+button.green{background:#159447}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.summary{background:#fff0f4;padding:14px;border-radius:14px;margin:14px 0}
+.summary div{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed #ffd1dc}
+.summary div:last-child{border-bottom:0;font-size:20px;font-weight:900}
+.profit{color:#159447}.loss{color:#d63333}
+.item{background:#fff8fa;border:1px solid #ffd8e2;padding:12px;margin-top:10px;border-radius:14px}
+.item small{color:#777}
+.item button{margin-top:8px;padding:8px;font-size:14px}
+.win{border-color:#37b26c;background:#f0fff6}
+.lose{opacity:.88}
+.note{font-size:13px;color:#777;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="box">
+<h1>เว็บคีย์หวยรับแทง</h1>
+
+<h3>คีย์โพย</h3>
+<div class="grid">
+<div>
+<label>ชื่อลูกค้า</label>
+<input id="customer" placeholder="ไม่ใส่ก็ได้" />
+</div>
+<div>
+<label>งวด/ชื่อหวย</label>
+<select id="lotteryName">
+<option>หวยรัฐบาล</option>
+<option>หวยลาว</option>
+<option>หวยฮานอย</option>
+<option>หวยหุ้น</option>
+</select>
+</div>
+</div>
+
+<div class="grid">
+<div>
+<label>ประเภทเลข</label>
+<select id="betType">
+<option value="สามตัวบน">สามตัวบน x450</option>
+<option value="สามตัวโต๊ด">สามตัวโต๊ด x100</option>
+<option value="สองตัวบน">สองตัวบน x70</option>
+<option value="สองตัวล่าง">สองตัวล่าง x70</option>
+<option value="หกกลับ">หกกลับ x70</option>
+</select>
+</div>
+<div>
+<label>เลข</label>
+<input id="number" placeholder="เช่น 123 / 45" />
+</div>
+</div>
+
+<label>ยอดแทง/ยอดรับ</label>
+<input id="price" type="number" placeholder="บาท" />
+
+<button onclick="addLotto()">บันทึกรายการ</button>
+
+<h3>กรอกผลรางวัลแล้วกดตรวจ</h3>
+<div class="grid">
+<div>
+<label>ผล 3 ตัวบน</label>
+<input id="resultTop3" maxlength="3" placeholder="เช่น 123" />
+</div>
+<div>
+<label>ผล 2 ตัวล่าง</label>
+<input id="resultBottom2" maxlength="2" placeholder="เช่น 45" />
+</div>
+</div>
+
+<button class="green" onclick="checkResults()">ตรวจผลอัตโนมัติ</button>
+<div class="note">ระบบจะคิดยอดจ่ายจากอัตรา: 3 บน 450, โต๊ด 100, 2 บน/ล่าง 70, หกกลับ 70</div>
+
+<div class="summary">
+<div><span>จำนวนโพยทั้งหมด</span><b id="totalCount">0 รายการ</b></div>
+<div><span>ถูก</span><b id="winCount">0 รายการ</b></div>
+<div><span>ไม่ถูก</span><b id="loseCount">0 รายการ</b></div>
+<div><span>ยอดรับทั้งหมด</span><b id="totalReceive">0 บาท</b></div>
+<div><span>ยอดจ่ายคนถูก</span><b id="totalPayout">0 บาท</b></div>
+<div><span>กำไร/ขาดทุน</span><b id="profitLoss">0 บาท</b></div>
+</div>
+
+<div class="grid">
+<button class="gray" onclick="exportText()">คัดลอกสรุป</button>
+<button class="red" onclick="clearAll()">ล้างทั้งหมด</button>
+</div>
+
+<h3>รายการที่คีย์ไว้</h3>
+<div id="list"></div>
+</div>
+
+<script>
+const rates = {
+  "สามตัวบน": 450,
+  "สามตัวโต๊ด": 100,
+  "สองตัวบน": 70,
+  "สองตัวล่าง": 70,
+  "หกกลับ": 70
+};
+
+let items = JSON.parse(localStorage.getItem("lottoDealerItemsV1") || "[]");
+
+function money(n){ return Number(n || 0).toLocaleString("th-TH") + " บาท"; }
+function onlyNum(s){ return String(s || "").replace(/\D/g,""); }
+function sortDigits(s){ return String(s).split("").sort().join(""); }
+
+function save(){
+  localStorage.setItem("lottoDealerItemsV1", JSON.stringify(items));
+  render();
+}
+
+function addLotto(){
+  const customer = document.getElementById("customer").value.trim();
+  const lotteryName = document.getElementById("lotteryName").value;
+  const betType = document.getElementById("betType").value;
+  const number = onlyNum(document.getElementById("number").value.trim());
+  const price = Number(document.getElementById("price").value || 0);
+
+  if(!number || price <= 0){
+    alert("กรอกเลขและยอดแทงก่อนน้า");
+    return;
+  }
+
+  if((betType.includes("สาม") || betType === "หกกลับ") && number.length !== 3){
+    alert("ประเภทนี้ต้องใส่เลข 3 ตัว");
+    return;
+  }
+
+  if(betType.includes("สอง") && number.length !== 2){
+    alert("ประเภทนี้ต้องใส่เลข 2 ตัว");
+    return;
+  }
+
+  items.unshift({
+    id: Date.now(),
+    customer,
+    lotteryName,
+    betType,
+    number,
+    price,
+    rate: rates[betType],
+    status: "pending",
+    payout: 0,
+    time: new Date().toLocaleString("th-TH")
+  });
+
+  document.getElementById("number").value = "";
+  document.getElementById("price").value = "";
+  save();
+}
+
+function checkOne(item, top3, bottom2){
+  const top2 = top3 ? top3.slice(-2) : "";
+  let isWin = false;
+
+  if(item.betType === "สามตัวบน"){
+    isWin = item.number === top3;
+  } else if(item.betType === "สามตัวโต๊ด"){
+    isWin = top3.length === 3 && sortDigits(item.number) === sortDigits(top3);
+  } else if(item.betType === "สองตัวบน"){
+    isWin = item.number === top2;
+  } else if(item.betType === "สองตัวล่าง"){
+    isWin = item.number === bottom2;
+  } else if(item.betType === "หกกลับ"){
+    isWin = top3.length === 3 && sortDigits(item.number) === sortDigits(top3);
+  }
+
+  item.status = isWin ? "win" : "lose";
+  item.payout = isWin ? item.price * item.rate : 0;
+}
+
+function checkResults(){
+  const top3 = onlyNum(document.getElementById("resultTop3").value);
+  const bottom2 = onlyNum(document.getElementById("resultBottom2").value);
+
+  if(top3.length !== 3 || bottom2.length !== 2){
+    alert("กรอกผล 3 ตัวบน และ 2 ตัวล่างให้ครบก่อน");
+    return;
+  }
+
+  items = items.map(item => {
+    checkOne(item, top3, bottom2);
+    return item;
+  });
+  save();
+}
+
+function removeItem(id){
+  items = items.filter(x => x.id !== id);
+  save();
+}
+
+function clearAll(){
+  if(confirm("ล้างรายการทั้งหมดใช่ไหม?")){
+    items = [];
+    save();
+  }
+}
+
+function render(){
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  let totalReceive = items.reduce((sum,x)=>sum + Number(x.price),0);
+  let totalPayout = items.reduce((sum,x)=>sum + Number(x.payout),0);
+  let profit = totalReceive - totalPayout;
+  let winCount = items.filter(x=>x.status==="win").length;
+  let loseCount = items.filter(x=>x.status==="lose").length;
+
+  document.getElementById("totalCount").textContent = items.length + " รายการ";
+  document.getElementById("winCount").textContent = winCount + " รายการ";
+  document.getElementById("loseCount").textContent = loseCount + " รายการ";
+  document.getElementById("totalReceive").textContent = money(totalReceive);
+  document.getElementById("totalPayout").textContent = money(totalPayout);
+
+  const pl = document.getElementById("profitLoss");
+  pl.textContent = money(profit);
+  pl.className = profit >= 0 ? "profit" : "loss";
+
+  items.forEach(x=>{
+    let statusText = "⏳ ยังไม่ตรวจ";
+    if(x.status === "win") statusText = "✅ ถูก";
+    if(x.status === "lose") statusText = "❌ ไม่ถูก";
+
+    const div = document.createElement("div");
+    div.className = "item " + (x.status === "win" ? "win" : x.status === "lose" ? "lose" : "");
+    div.innerHTML = `
+      <b>${x.lotteryName}</b> | <b>${x.betType}</b> x${x.rate} ${statusText}<br>
+      ลูกค้า: <b>${x.customer || "-"}</b><br>
+      เลข: <b>${x.number}</b><br>
+      ยอดแทง/รับ: ${money(x.price)}<br>
+      ยอดจ่าย: <b>${money(x.payout)}</b><br>
+      <small>${x.time}</small>
+      <button class="red" onclick="removeItem(${x.id})">ลบรายการนี้</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function exportText(){
+  let totalReceive = items.reduce((sum,x)=>sum + Number(x.price),0);
+  let totalPayout = items.reduce((sum,x)=>sum + Number(x.payout),0);
+  let profit = totalReceive - totalPayout;
+  let winCount = items.filter(x=>x.status==="win").length;
+  let loseCount = items.filter(x=>x.status==="lose").length;
+
+  let text = `สรุปหวยรับแทง
+โพยทั้งหมด: ${items.length} รายการ
+ถูก: ${winCount} รายการ
+ไม่ถูก: ${loseCount} รายการ
+ยอดรับทั้งหมด: ${money(totalReceive)}
+ยอดจ่ายคนถูก: ${money(totalPayout)}
+กำไร/ขาดทุน: ${money(profit)}`;
+
+  navigator.clipboard.writeText(text);
+  alert("คัดลอกสรุปแล้ว");
+}
+
+render();
+</script>
+</body>
+</html>
